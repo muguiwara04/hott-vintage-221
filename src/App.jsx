@@ -730,7 +730,7 @@ const App = () => {
                     <div key={idx} style={{ position: 'relative' }}>
                       <img
                         src={img}
-                        alt={`Photo ${idx + 1}`}
+                        alt={`Article ${idx + 1}`}
                         style={{
                           width: '100%',
                           height: '100px',
