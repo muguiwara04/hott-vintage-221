@@ -3,7 +3,7 @@ import { Camera, ShoppingBag, Trash2, Edit2, LogOut, Lock, X, Plus, Archive } fr
 
 // Configuration
 const WHATSAPP_NUMBER = '221757421314';
-const ADMIN_PASSWORD = 'hottvintage2024'; // Change this after deployment!
+const ADMIN_PASSWORD = 'Lech@ncelier04'; // Change this after deployment!
 
 const App = () => {
   const [products, setProducts] = useState([]);
