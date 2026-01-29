@@ -311,7 +311,7 @@ const App = () => {
         margin: '0 auto',
         padding: '2rem',
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
         gap: '2rem'
       }}>
         {(view === 'available' ? availableProducts : soldProducts).map(product => (
@@ -335,7 +335,7 @@ const App = () => {
             }}
           >
             {/* Image */}
-            <div style={{ position: 'relative', paddingTop: '120%', background: '#000' }}>
+            <div style={{ position: 'relative', paddingTop: '100%', background: '#000' }}>
               {product.images.length > 0 ? (
                 <img
                   src={product.images[0]}
