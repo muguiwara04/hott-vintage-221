@@ -3,8 +3,8 @@ import { Camera, ShoppingBag, Trash2, Edit2, LogOut, Lock, X, Plus, Archive, Che
 import { createClient } from '@supabase/supabase-js';
 
 // Supabase Configuration - TO BE REPLACED
-const supabaseUrl = 'YOUR_SUPABASE_URL';
-const supabaseKey = 'YOUR_SUPABASE_ANON_KEY';
+const supabaseUrl = 'https://gfgczrhmsrbnzisogiev.supabase.co';
+const supabaseKey = 'sb_publishable_9KoafXYAMGuAs7NjfyCeMQ_f98sLYDj';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Configuration
