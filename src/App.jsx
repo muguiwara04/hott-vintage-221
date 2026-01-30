@@ -1,9 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Camera, ShoppingBag, Trash2, Edit2, LogOut, Lock, X, Plus, Archive } from 'lucide-react';
+import { Camera, ShoppingBag, Trash2, Edit2, LogOut, Lock, X, Plus, Archive, ChevronLeft, ChevronRight } from 'lucide-react';
+import { createClient } from '@supabase/supabase-js';
+
+// Supabase Configuration - TO BE REPLACED
+const supabaseUrl = 'YOUR_SUPABASE_URL';
+const supabaseKey = 'YOUR_SUPABASE_ANON_KEY';
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Configuration
 const WHATSAPP_NUMBER = '221757421314';
-const ADMIN_PASSWORD = 'Lech@ncelier04'; // Change this after deployment!
+const ADMIN_PASSWORD = 'hottvintage2024'; // Change this after deployment!
 
 const App = () => {
   const [products, setProducts] = useState([]);
@@ -12,7 +18,10 @@ const App = () => {
   const [password, setPassword] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
-  const [view, setView] = useState('available'); // 'available' or 'sold'
+  const [view, setView] = useState('available');
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState('');
+  const [currentImageIndex, setCurrentImageIndex] = useState({});
   const [newProduct, setNewProduct] = useState({
     name: '',
     price: '',
@@ -20,35 +29,45 @@ const App = () => {
     brand: '',
     condition: '',
     images: [],
-    sold: false
+    sold: false,
+    reference: ''
   });
 
-  // Load products from localStorage
+  // Load products from Supabase in real-time
   useEffect(() => {
-    const saved = localStorage.getItem('hott-vintage-products');
-    if (saved) {
-      setProducts(JSON.parse(saved));
-    } else {
-      // Demo products
-      setProducts([
-        {
-          id: Date.now(),
-          name: 'Veste en jean vintage',
-          price: '15000',
-          size: 'M',
-          brand: 'Levi\'s',
-          condition: 'Excellent',
-          images: ['https://images.unsplash.com/photo-1551028719-00167b16eac5?w=500'],
-          sold: false
-        }
-      ]);
-    }
+    loadProducts();
+    
+    // Subscribe to real-time changes
+    const subscription = supabase
+      .channel('products_channel')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => {
+        loadProducts();
+      })
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
-  // Save products to localStorage
-  useEffect(() => {
-    localStorage.setItem('hott-vintage-products', JSON.stringify(products));
-  }, [products]);
+  const loadProducts = async () => {
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('Error loading products:', error);
+    } else {
+      setProducts(data || []);
+    }
+  };
+
+  // Generate unique reference
+  const generateReference = () => {
+    const timestamp = Date.now().toString().slice(-6);
+    return `REF-${timestamp}`;
+  };
 
   const handleLogin = () => {
     if (password === ADMIN_PASSWORD) {
@@ -60,71 +79,164 @@ const App = () => {
     }
   };
 
+  // Upload images to Supabase Storage
+  const uploadImages = async (files) => {
+    const uploadedUrls = [];
+    
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const filePath = `products/${fileName}`;
+
+      setUploadProgress(`Upload de ${i + 1}/${files.length} images...`);
+
+      const { error: uploadError } = await supabase.storage
+        .from('product-images')
+        .upload(filePath, file);
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        throw uploadError;
+      }
+
+      // Get public URL
+      const { data } = supabase.storage
+        .from('product-images')
+        .getPublicUrl(filePath);
+
+      uploadedUrls.push(data.publicUrl);
+    }
+
+    return uploadedUrls;
+  };
+
   const handleImageUpload = async (e, isEditing = false) => {
     const files = Array.from(e.target.files);
-    const imagePromises = files.map(file => {
-      return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result);
-        reader.readAsDataURL(file);
-      });
-    });
+    setUploading(true);
+    setUploadProgress(`Upload de 0/${files.length} images...`);
 
-    const imageResults = await Promise.all(imagePromises);
-    
-    if (isEditing && editingProduct) {
-      setEditingProduct({
-        ...editingProduct,
-        images: [...editingProduct.images, ...imageResults]
-      });
-    } else {
-      setNewProduct({
-        ...newProduct,
-        images: [...newProduct.images, ...imageResults]
-      });
+    try {
+      const imageUrls = await uploadImages(files);
+
+      if (isEditing && editingProduct) {
+        setEditingProduct({
+          ...editingProduct,
+          images: [...editingProduct.images, ...imageUrls]
+        });
+      } else {
+        setNewProduct({
+          ...newProduct,
+          images: [...newProduct.images, ...imageUrls]
+        });
+      }
+      
+      setUploadProgress('');
+    } catch (error) {
+      console.error('Error uploading images:', error);
+      alert('Erreur lors du téléchargement des images');
+      setUploadProgress('');
+    } finally {
+      setUploading(false);
     }
   };
 
-  const addProduct = () => {
+  const addProduct = async () => {
     if (!newProduct.name || !newProduct.price) {
       alert('Nom et prix sont obligatoires');
       return;
     }
 
-    const product = {
-      ...newProduct,
-      id: Date.now(),
-      sold: false
-    };
+    if (newProduct.images.length === 0) {
+      alert('Ajoutez au moins une photo');
+      return;
+    }
 
-    setProducts([product, ...products]);
-    setNewProduct({
-      name: '',
-      price: '',
-      size: '',
-      brand: '',
-      condition: '',
-      images: [],
-      sold: false
-    });
-    setShowAddModal(false);
-  };
+    try {
+      const productData = {
+        name: newProduct.name,
+        price: newProduct.price,
+        size: newProduct.size,
+        brand: newProduct.brand,
+        condition: newProduct.condition,
+        images: newProduct.images,
+        reference: generateReference(),
+        sold: false,
+        created_at: new Date().toISOString()
+      };
 
-  const updateProduct = () => {
-    setProducts(products.map(p => p.id === editingProduct.id ? editingProduct : p));
-    setEditingProduct(null);
-  };
+      const { error } = await supabase
+        .from('products')
+        .insert([productData]);
 
-  const deleteProduct = (id) => {
-    if (window.confirm('Supprimer cet article ?')) {
-      setProducts(products.filter(p => p.id !== id));
+      if (error) throw error;
+      
+      setNewProduct({
+        name: '',
+        price: '',
+        size: '',
+        brand: '',
+        condition: '',
+        images: [],
+        sold: false,
+        reference: ''
+      });
+      setShowAddModal(false);
+      alert('Article ajouté avec succès !');
+    } catch (error) {
+      console.error('Error adding product:', error);
+      alert('Erreur lors de l\'ajout de l\'article');
     }
   };
 
-  const toggleSold = (id) => {
-    setProducts(products.map(p => 
-      p.id === id ? { ...p, sold: !p.sold } : p
-    ));
+  const updateProduct = async () => {
+    try {
+      const { id, created_at, ...updateData } = editingProduct;
+      
+      const { error } = await supabase
+        .from('products')
+        .update(updateData)
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setEditingProduct(null);
+      alert('Article modifié avec succès !');
+    } catch (error) {
+      console.error('Error updating product:', error);
+      alert('Erreur lors de la modification');
+    }
+  };
+
+  const deleteProduct = async (id) => {
+    if (window.confirm('Supprimer cet article ?')) {
+      try {
+        const { error } = await supabase
+          .from('products')
+          .delete()
+          .eq('id', id);
+
+        if (error) throw error;
+        alert('Article supprimé !');
+      } catch (error) {
+        console.error('Error deleting product:', error);
+        alert('Erreur lors de la suppression');
+      }
+    }
+  };
+
+  const toggleSold = async (product) => {
+    try {
+      const { error } = await supabase
+        .from('products')
+        .update({ sold: !product.sold })
+        .eq('id', product.id);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error toggling sold status:', error);
+      alert('Erreur lors de la mise à jour');
+    }
   };
 
   const removeImage = (index, isEditing = false) => {
@@ -142,9 +254,25 @@ const App = () => {
   };
 
   const sendWhatsApp = (product) => {
-    const message = `Bonjour, je suis intéressé(e) par ${product.name} à ${product.price} FCFA`;
+    const message = `Bonjour, je suis intéressé(e) par ${product.name} (${product.reference}) à ${product.price} FCFA`;
     const url = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
     window.open(url, '_blank');
+  };
+
+  const nextImage = (productId) => {
+    const product = products.find(p => p.id === productId);
+    const maxIndex = product.images.length - 1;
+    setCurrentImageIndex(prev => ({
+      ...prev,
+      [productId]: Math.min((prev[productId] || 0) + 1, maxIndex)
+    }));
+  };
+
+  const prevImage = (productId) => {
+    setCurrentImageIndex(prev => ({
+      ...prev,
+      [productId]: Math.max((prev[productId] || 0) - 1, 0)
+    }));
   };
 
   const availableProducts = products.filter(p => !p.sold);
@@ -312,178 +440,265 @@ const App = () => {
         padding: '2rem',
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-        gap: '2rem'
+        gap: '1.5rem'
       }}>
-        {(view === 'available' ? availableProducts : soldProducts).map(product => (
-          <div
-            key={product.id}
-            style={{
-              background: 'rgba(255,255,255,0.05)',
-              borderRadius: '12px',
-              overflow: 'hidden',
-              border: '1px solid rgba(218,165,32,0.2)',
-              transition: 'transform 0.3s ease, box-shadow 0.3s ease',
-              cursor: 'pointer'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-8px)';
-              e.currentTarget.style.boxShadow = '0 20px 40px rgba(218,165,32,0.3)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = 'none';
-            }}
-          >
-            {/* Image */}
-            <div style={{ position: 'relative', paddingTop: '100%', background: '#000' }}>
-              {product.images.length > 0 ? (
-                <img
-                  src={product.images[0]}
-                  alt={product.name}
-                  style={{
+        {(view === 'available' ? availableProducts : soldProducts).map(product => {
+          const currentIndex = currentImageIndex[product.id] || 0;
+          return (
+            <div
+              key={product.id}
+              style={{
+                background: 'rgba(255,255,255,0.05)',
+                borderRadius: '12px',
+                overflow: 'hidden',
+                border: '1px solid rgba(218,165,32,0.2)',
+                transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+                cursor: 'pointer'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-8px)';
+                e.currentTarget.style.boxShadow = '0 20px 40px rgba(218,165,32,0.3)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+            >
+              {/* Image Carousel */}
+              <div style={{ position: 'relative', paddingTop: '100%', background: '#000' }}>
+                {product.images && product.images.length > 0 ? (
+                  <>
+                    <img
+                      src={product.images[currentIndex]}
+                      alt={product.name}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover'
+                      }}
+                    />
+                    {product.images.length > 1 && (
+                      <>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            prevImage(product.id);
+                          }}
+                          style={{
+                            position: 'absolute',
+                            left: '0.5rem',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            background: 'rgba(0,0,0,0.6)',
+                            border: 'none',
+                            borderRadius: '50%',
+                            width: '32px',
+                            height: '32px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            color: '#fff',
+                            opacity: currentIndex === 0 ? 0.3 : 1
+                          }}
+                          disabled={currentIndex === 0}
+                        >
+                          <ChevronLeft size={20} />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            nextImage(product.id);
+                          }}
+                          style={{
+                            position: 'absolute',
+                            right: '0.5rem',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            background: 'rgba(0,0,0,0.6)',
+                            border: 'none',
+                            borderRadius: '50%',
+                            width: '32px',
+                            height: '32px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            color: '#fff',
+                            opacity: currentIndex === product.images.length - 1 ? 0.3 : 1
+                          }}
+                          disabled={currentIndex === product.images.length - 1}
+                        >
+                          <ChevronRight size={20} />
+                        </button>
+                        <div style={{
+                          position: 'absolute',
+                          bottom: '0.5rem',
+                          left: '50%',
+                          transform: 'translateX(-50%)',
+                          background: 'rgba(0,0,0,0.6)',
+                          padding: '0.25rem 0.75rem',
+                          borderRadius: '12px',
+                          fontSize: '0.75rem',
+                          color: '#fff',
+                          fontFamily: 'Arial'
+                        }}>
+                          {currentIndex + 1} / {product.images.length}
+                        </div>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <div style={{
                     position: 'absolute',
                     top: 0,
                     left: 0,
                     width: '100%',
                     height: '100%',
-                    objectFit: 'cover'
-                  }}
-                />
-              ) : (
-                <div style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  background: 'rgba(218,165,32,0.1)'
-                }}>
-                  <Camera size={48} color="#666" />
-                </div>
-              )}
-              {product.sold && (
-                <div style={{
-                  position: 'absolute',
-                  top: '1rem',
-                  right: '1rem',
-                  background: '#e74c3c',
-                  color: '#fff',
-                  padding: '0.5rem 1rem',
-                  borderRadius: '6px',
-                  fontWeight: 700,
-                  fontFamily: 'Arial',
-                  fontSize: '0.9rem'
-                }}>
-                  VENDU
-                </div>
-              )}
-            </div>
-
-            {/* Content */}
-            <div style={{ padding: '1.5rem' }}>
-              <h3 style={{
-                margin: '0 0 0.5rem 0',
-                fontSize: '1.3rem',
-                color: '#DAA520'
-              }}>
-                {product.name}
-              </h3>
-              
-              <div style={{
-                fontFamily: 'Arial',
-                fontSize: '0.9rem',
-                color: '#999',
-                marginBottom: '1rem'
-              }}>
-                {product.brand && <div>Marque: {product.brand}</div>}
-                {product.size && <div>Taille: {product.size}</div>}
-                {product.condition && <div>État: {product.condition}</div>}
-              </div>
-
-              <div style={{
-                fontSize: '1.5rem',
-                fontWeight: 700,
-                color: '#FFD700',
-                marginBottom: '1rem',
-                fontFamily: 'Arial'
-              }}>
-                {product.price} FCFA
-              </div>
-
-              {/* Actions */}
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                {!product.sold && (
-                  <button
-                    onClick={() => sendWhatsApp(product)}
-                    style={{
-                      flex: 1,
-                      background: '#25D366',
-                      border: 'none',
-                      padding: '0.75rem',
-                      borderRadius: '8px',
-                      color: '#fff',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      fontFamily: 'Arial'
-                    }}
-                  >
-                    Commander
-                  </button>
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'rgba(218,165,32,0.1)'
+                  }}>
+                    <Camera size={48} color="#666" />
+                  </div>
                 )}
+                {product.sold && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '0.5rem',
+                    right: '0.5rem',
+                    background: '#e74c3c',
+                    color: '#fff',
+                    padding: '0.4rem 0.8rem',
+                    borderRadius: '6px',
+                    fontWeight: 700,
+                    fontFamily: 'Arial',
+                    fontSize: '0.75rem'
+                  }}>
+                    VENDU
+                  </div>
+                )}
+              </div>
+
+              {/* Content */}
+              <div style={{ padding: '1rem' }}>
+                <div style={{
+                  fontSize: '0.7rem',
+                  color: '#DAA520',
+                  fontFamily: 'Arial',
+                  marginBottom: '0.25rem',
+                  fontWeight: 600
+                }}>
+                  {product.reference}
+                </div>
                 
-                {isAdmin && (
-                  <>
+                <h3 style={{
+                  margin: '0 0 0.5rem 0',
+                  fontSize: '1.1rem',
+                  color: '#DAA520'
+                }}>
+                  {product.name}
+                </h3>
+                
+                <div style={{
+                  fontFamily: 'Arial',
+                  fontSize: '0.8rem',
+                  color: '#999',
+                  marginBottom: '0.75rem'
+                }}>
+                  {product.brand && <div>Marque: {product.brand}</div>}
+                  {product.size && <div>Taille: {product.size}</div>}
+                  {product.condition && <div>État: {product.condition}</div>}
+                </div>
+
+                <div style={{
+                  fontSize: '1.3rem',
+                  fontWeight: 700,
+                  color: '#FFD700',
+                  marginBottom: '0.75rem',
+                  fontFamily: 'Arial'
+                }}>
+                  {product.price} FCFA
+                </div>
+
+                {/* Actions */}
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  {!product.sold && (
                     <button
-                      onClick={() => toggleSold(product.id)}
+                      onClick={() => sendWhatsApp(product)}
                       style={{
                         flex: 1,
-                        background: product.sold ? '#27ae60' : '#e67e22',
+                        background: '#25D366',
                         border: 'none',
-                        padding: '0.75rem',
+                        padding: '0.6rem',
                         borderRadius: '8px',
                         color: '#fff',
                         fontWeight: 600,
                         cursor: 'pointer',
-                        fontFamily: 'Arial'
+                        fontFamily: 'Arial',
+                        fontSize: '0.85rem'
                       }}
                     >
-                      {product.sold ? 'Disponible' : 'Vendu'}
+                      Commander
                     </button>
-                    <button
-                      onClick={() => setEditingProduct(product)}
-                      style={{
-                        background: '#3498db',
-                        border: 'none',
-                        padding: '0.75rem',
-                        borderRadius: '8px',
-                        color: '#fff',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      <Edit2 size={18} />
-                    </button>
-                    <button
-                      onClick={() => deleteProduct(product.id)}
-                      style={{
-                        background: '#e74c3c',
-                        border: 'none',
-                        padding: '0.75rem',
-                        borderRadius: '8px',
-                        color: '#fff',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  </>
-                )}
+                  )}
+                  
+                  {isAdmin && (
+                    <>
+                      <button
+                        onClick={() => toggleSold(product)}
+                        style={{
+                          flex: 1,
+                          background: product.sold ? '#27ae60' : '#e67e22',
+                          border: 'none',
+                          padding: '0.6rem',
+                          borderRadius: '8px',
+                          color: '#fff',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          fontFamily: 'Arial',
+                          fontSize: '0.85rem'
+                        }}
+                      >
+                        {product.sold ? 'Disponible' : 'Vendu'}
+                      </button>
+                      <button
+                        onClick={() => setEditingProduct(product)}
+                        style={{
+                          background: '#3498db',
+                          border: 'none',
+                          padding: '0.6rem',
+                          borderRadius: '8px',
+                          color: '#fff',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                      <button
+                        onClick={() => deleteProduct(product.id)}
+                        style={{
+                          background: '#e74c3c',
+                          border: 'none',
+                          padding: '0.6rem',
+                          borderRadius: '8px',
+                          color: '#fff',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Login Modal */}
@@ -717,7 +932,7 @@ const App = () => {
                   color: '#DAA520',
                   fontFamily: 'Arial'
                 }}>
-                  Photos
+                  Photos {uploadProgress && `(${uploadProgress})`}
                 </label>
                 
                 <div style={{
@@ -769,18 +984,20 @@ const App = () => {
                   border: '2px dashed #666',
                   borderRadius: '8px',
                   color: '#DAA520',
-                  cursor: 'pointer',
+                  cursor: uploading ? 'not-allowed' : 'pointer',
                   fontFamily: 'Arial',
-                  textAlign: 'center'
+                  textAlign: 'center',
+                  opacity: uploading ? 0.5 : 1
                 }}>
                   <Camera size={20} style={{ verticalAlign: 'middle', marginRight: '0.5rem' }} />
-                  Ajouter des photos
+                  {uploading ? 'Upload en cours...' : 'Ajouter des photos'}
                   <input
                     type="file"
                     accept="image/*"
                     multiple
                     onChange={(e) => handleImageUpload(e, !!editingProduct)}
                     style={{ display: 'none' }}
+                    disabled={uploading}
                   />
                 </label>
               </div>
@@ -788,19 +1005,20 @@ const App = () => {
               <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
                 <button
                   onClick={editingProduct ? updateProduct : addProduct}
+                  disabled={uploading}
                   style={{
                     flex: 1,
-                    background: 'linear-gradient(135deg, #DAA520 0%, #FFD700 100%)',
+                    background: uploading ? '#666' : 'linear-gradient(135deg, #DAA520 0%, #FFD700 100%)',
                     border: 'none',
                     padding: '0.75rem',
                     borderRadius: '8px',
-                    color: '#000',
+                    color: uploading ? '#999' : '#000',
                     fontWeight: 600,
-                    cursor: 'pointer',
+                    cursor: uploading ? 'not-allowed' : 'pointer',
                     fontFamily: 'Arial'
                   }}
                 >
-                  {editingProduct ? 'Modifier' : 'Ajouter'}
+                  {uploading ? 'Veuillez patienter...' : (editingProduct ? 'Modifier' : 'Ajouter')}
                 </button>
                 <button
                   onClick={() => {
