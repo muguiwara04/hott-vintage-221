@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 
 // Supabase Configuration - TO BE REPLACED
 const supabaseUrl = 'https://gfgczrhmsrbnzisogiev.supabase.co';
-const supabaseKey = 'sb_publishable_9KoafXYAMGuAs7NjfyCeMQ_f98sLYDj';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdmZ2N6cmhtc3Jibnppc29naWV2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk3OTI4NjEsImV4cCI6MjA4NTM2ODg2MX0.YyU4_kXEEYonjPpfJRBWPw7KNknC7LT0ZsIYz0OOZOM';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Configuration
