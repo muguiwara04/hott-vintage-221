@@ -9,13 +9,15 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Configuration
 const WHATSAPP_NUMBER = '221757421314';
-const ADMIN_PASSWORD = 'hottvintage2024'; // Change this after deployment!
 
 const App = () => {
   const [products, setProducts] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [user, setUser] = useState(null);
   const [showLogin, setShowLogin] = useState(false);
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [view, setView] = useState('available');
@@ -32,6 +34,34 @@ const App = () => {
     sold: false,
     reference: ''
   });
+
+  // Check auth status on mount
+  useEffect(() => {
+    checkUser();
+    
+    // Listen for auth changes
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        setUser(session.user);
+        setIsAdmin(true);
+      } else {
+        setUser(null);
+        setIsAdmin(false);
+      }
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
+
+  const checkUser = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      setUser(session.user);
+      setIsAdmin(true);
+    }
+  };
 
   // Load products from Supabase in real-time
   useEffect(() => {
@@ -74,14 +104,40 @@ const App = () => {
     return `REF-${timestamp}`;
   };
 
-  const handleLogin = () => {
-    if (password === ADMIN_PASSWORD) {
-      setIsAdmin(true);
-      setShowLogin(false);
-      setPassword('');
-    } else {
-      alert('Mot de passe incorrect');
+  const handleLogin = async () => {
+    if (!email || !password) {
+      alert('Email et mot de passe requis');
+      return;
     }
+
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email,
+        password: password,
+      });
+
+      if (error) {
+        alert('Erreur de connexion : ' + error.message);
+      } else {
+        setUser(data.user);
+        setIsAdmin(true);
+        setShowLogin(false);
+        setEmail('');
+        setPassword('');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      alert('Erreur de connexion');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setIsAdmin(false);
   };
 
   // Upload images to Supabase Storage
@@ -164,7 +220,7 @@ const App = () => {
         size: newProduct.size,
         brand: newProduct.brand,
         condition: newProduct.condition,
-        images: JSON.stringify(newProduct.images), // Convert array to JSON string
+        images: JSON.stringify(newProduct.images),
         reference: generateReference(),
         sold: false,
         created_at: new Date().toISOString()
@@ -198,7 +254,6 @@ const App = () => {
     try {
       const { id, created_at, ...updateData } = editingProduct;
       
-      // Convert images array to JSON string
       const dataToUpdate = {
         ...updateData,
         images: JSON.stringify(updateData.images)
@@ -334,8 +389,19 @@ const App = () => {
           </div>
           
           <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-            {isAdmin ? (
+            {isAdmin && user ? (
               <>
+                <div style={{ 
+                  fontSize: '0.85rem', 
+                  color: '#999', 
+                  fontFamily: 'Arial',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}>
+                  <span style={{ color: '#DAA520' }}>●</span>
+                  {user.email}
+                </div>
                 <button
                   onClick={() => setShowAddModal(true)}
                   style={{
@@ -356,7 +422,7 @@ const App = () => {
                   Ajouter
                 </button>
                 <button
-                  onClick={() => setIsAdmin(false)}
+                  onClick={handleLogout}
                   style={{
                     background: 'transparent',
                     border: '1px solid #666',
@@ -736,6 +802,23 @@ const App = () => {
           }}>
             <h2 style={{ marginTop: 0, color: '#DAA520' }}>Connexion Admin</h2>
             <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Email"
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                marginBottom: '1rem',
+                borderRadius: '8px',
+                border: '1px solid #666',
+                background: '#1a1a1a',
+                color: '#f5f5f5',
+                fontFamily: 'Arial',
+                fontSize: '1rem'
+              }}
+            />
+            <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -756,23 +839,25 @@ const App = () => {
             <div style={{ display: 'flex', gap: '1rem' }}>
               <button
                 onClick={handleLogin}
+                disabled={isLoading}
                 style={{
                   flex: 1,
-                  background: 'linear-gradient(135deg, #DAA520 0%, #FFD700 100%)',
+                  background: isLoading ? '#666' : 'linear-gradient(135deg, #DAA520 0%, #FFD700 100%)',
                   border: 'none',
                   padding: '0.75rem',
                   borderRadius: '8px',
-                  color: '#000',
+                  color: isLoading ? '#999' : '#000',
                   fontWeight: 600,
-                  cursor: 'pointer',
+                  cursor: isLoading ? 'not-allowed' : 'pointer',
                   fontFamily: 'Arial'
                 }}
               >
-                Connexion
+                {isLoading ? 'Connexion...' : 'Connexion'}
               </button>
               <button
                 onClick={() => {
                   setShowLogin(false);
+                  setEmail('');
                   setPassword('');
                 }}
                 style={{
