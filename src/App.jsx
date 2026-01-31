@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Camera, ShoppingBag, Trash2, Edit2, LogOut, Lock, X, Plus, Archive, ChevronLeft, ChevronRight } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
-// Supabase Configuration - TO BE REPLACED
+// Supabase Configuration
 const supabaseUrl = 'https://gfgczrhmsrbnzisogiev.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdmZ2N6cmhtc3Jibnppc29naWV2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk3OTI4NjEsImV4cCI6MjA4NTM2ODg2MX0.YyU4_kXEEYonjPpfJRBWPw7KNknC7LT0ZsIYz0OOZOM';
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -59,7 +59,12 @@ const App = () => {
     if (error) {
       console.error('Error loading products:', error);
     } else {
-      setProducts(data || []);
+      // Parse images JSON string to array
+      const parsedProducts = (data || []).map(product => ({
+        ...product,
+        images: product.images ? JSON.parse(product.images) : []
+      }));
+      setProducts(parsedProducts);
     }
   };
 
@@ -159,7 +164,7 @@ const App = () => {
         size: newProduct.size,
         brand: newProduct.brand,
         condition: newProduct.condition,
-        images: newProduct.images,
+        images: JSON.stringify(newProduct.images), // Convert array to JSON string
         reference: generateReference(),
         sold: false,
         created_at: new Date().toISOString()
@@ -193,9 +198,15 @@ const App = () => {
     try {
       const { id, created_at, ...updateData } = editingProduct;
       
+      // Convert images array to JSON string
+      const dataToUpdate = {
+        ...updateData,
+        images: JSON.stringify(updateData.images)
+      };
+      
       const { error } = await supabase
         .from('products')
-        .update(updateData)
+        .update(dataToUpdate)
         .eq('id', id);
 
       if (error) throw error;
