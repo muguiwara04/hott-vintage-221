@@ -26,12 +26,15 @@ const App = () => {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState('');
   const [currentImageIndex, setCurrentImageIndex] = useState({});
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Tous');
   const [sortBy, setSortBy] = useState('recent');
   const [zoomedImage, setZoomedImage] = useState(null);
   const [showStats, setShowStats] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
   const [newProduct, setNewProduct] = useState({
     name: '',
     price: '',
@@ -70,6 +73,15 @@ const App = () => {
       setIsAdmin(true);
     }
   };
+
+  // Scroll to top button
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 300);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   // Load products with OPTIMIZED realtime
   useEffect(() => {
@@ -138,7 +150,8 @@ const App = () => {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      alert('Email et mot de passe requis');
+      setToast('Email et mot de passe requis');
+      setTimeout(() => setToast(null), 3000);
       return;
     }
 
@@ -150,17 +163,21 @@ const App = () => {
       });
 
       if (error) {
-        alert('Erreur de connexion : ' + error.message);
+        setToast('Erreur de connexion : ' + error.message);
+        setTimeout(() => setToast(null), 3000);
       } else {
         setUser(data.user);
         setIsAdmin(true);
         setShowLogin(false);
         setEmail('');
         setPassword('');
+        setToast('Connexion réussie !');
+        setTimeout(() => setToast(null), 3000);
       }
     } catch (error) {
       console.error('Login error:', error);
-      alert('Erreur de connexion');
+      setToast('Erreur de connexion');
+      setTimeout(() => setToast(null), 3000);
     } finally {
       setIsLoading(false);
     }
@@ -171,6 +188,8 @@ const App = () => {
     setUser(null);
     setIsAdmin(false);
     setShowStats(false);
+    setToast('Déconnexion réussie');
+    setTimeout(() => setToast(null), 3000);
   };
 
   // OPTIMIZED: Compress images before upload
@@ -246,7 +265,8 @@ const App = () => {
     
     // Limit to 5 images
     if (files.length > 5) {
-      alert('Maximum 5 photos par article');
+      setToast('Maximum 5 photos par article');
+      setTimeout(() => setToast(null), 3000);
       return;
     }
     
@@ -271,7 +291,8 @@ const App = () => {
       setUploadProgress('');
     } catch (error) {
       console.error('Error uploading images:', error);
-      alert('Erreur lors du téléchargement des images');
+      setToast('Erreur lors du téléchargement des images');
+      setTimeout(() => setToast(null), 3000);
       setUploadProgress('');
     } finally {
       setUploading(false);
@@ -280,12 +301,14 @@ const App = () => {
 
   const addProduct = async () => {
     if (!newProduct.name || !newProduct.price) {
-      alert('Nom et prix sont obligatoires');
+      setToast('Nom et prix sont obligatoires');
+      setTimeout(() => setToast(null), 3000);
       return;
     }
 
     if (newProduct.images.length === 0) {
-      alert('Ajoutez au moins une photo');
+      setToast('Ajoutez au moins une photo');
+      setTimeout(() => setToast(null), 3000);
       return;
     }
 
@@ -321,10 +344,12 @@ const App = () => {
         reference: ''
       });
       setShowAddModal(false);
-      alert('Article ajouté avec succès !');
+      setToast('Article ajouté avec succès !');
+      setTimeout(() => setToast(null), 3000);
     } catch (error) {
       console.error('Error adding product:', error);
-      alert('Erreur lors de l\'ajout de l\'article');
+      setToast('Erreur lors de l\'ajout de l\'article');
+      setTimeout(() => setToast(null), 3000);
     }
   };
 
@@ -345,10 +370,12 @@ const App = () => {
       if (error) throw error;
 
       setEditingProduct(null);
-      alert('Article modifié avec succès !');
+      setToast('Article modifié avec succès !');
+      setTimeout(() => setToast(null), 3000);
     } catch (error) {
       console.error('Error updating product:', error);
-      alert('Erreur lors de la modification');
+      setToast('Erreur lors de la modification');
+      setTimeout(() => setToast(null), 3000);
     }
   };
 
@@ -361,10 +388,12 @@ const App = () => {
           .eq('id', id);
 
         if (error) throw error;
-        alert('Article supprimé !');
+        setToast('Article supprimé !');
+        setTimeout(() => setToast(null), 3000);
       } catch (error) {
         console.error('Error deleting product:', error);
-        alert('Erreur lors de la suppression');
+        setToast('Erreur lors de la suppression');
+        setTimeout(() => setToast(null), 3000);
       }
     }
   };
@@ -382,9 +411,12 @@ const App = () => {
         .eq('id', product.id);
 
       if (error) throw error;
+      setToast(product.sold ? 'Article marqué disponible' : 'Article marqué vendu');
+      setTimeout(() => setToast(null), 3000);
     } catch (error) {
       console.error('Error toggling sold status:', error);
-      alert('Erreur lors de la mise à jour');
+      setToast('Erreur lors de la mise à jour');
+      setTimeout(() => setToast(null), 3000);
     }
   };
 
@@ -523,7 +555,7 @@ const App = () => {
         background: theme.headerBg,
         backdropFilter: 'blur(10px)',
         borderBottom: `1px solid ${theme.border}`,
-        position: 'sticky',
+        position: 'relative',
         top: 0,
         zIndex: 100,
         padding: '1.5rem 2rem',
@@ -580,6 +612,22 @@ const App = () => {
               title={darkMode ? 'Mode clair' : 'Mode sombre'}
             >
               {darkMode ? <Sun size={20} /> : <Moon size={20} />}
+            </button>
+
+            {/* À propos button */}
+            <button
+              onClick={() => setShowAbout(true)}
+              style={{
+                background: 'transparent',
+                border: '1px solid #DAA520',
+                padding: '0.75rem 1.5rem',
+                borderRadius: '8px',
+                color: '#DAA520',
+                cursor: 'pointer',
+                fontFamily: 'Arial'
+              }}
+            >
+              À propos
             </button>
 
             {isAdmin && user ? (
@@ -660,24 +708,26 @@ const App = () => {
                 </button>
               </>
             ) : (
-              <button
-                onClick={() => setShowLogin(true)}
-                style={{
-                  background: 'transparent',
-                  border: '1px solid #DAA520',
-                  padding: '0.75rem 1.5rem',
-                  borderRadius: '8px',
-                  color: '#DAA520',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  fontFamily: 'Arial'
-                }}
-              >
-                <Lock size={20} />
-                Admin
-              </button>
+              window.location.pathname === '/admin' && (
+                <button
+                  onClick={() => setShowLogin(true)}
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid #DAA520',
+                    padding: '0.75rem 1.5rem',
+                    borderRadius: '8px',
+                    color: '#DAA520',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    fontFamily: 'Arial'
+                  }}
+                >
+                  <Lock size={20} />
+                  Admin
+                </button>
+              )
             )}
           </div>
         </div>
@@ -916,7 +966,7 @@ const App = () => {
               color: '#DAA520',
               textAlign: 'center'
             }}>
-              ✨ Nouveautés de la semaine
+              Nouveautés de la semaine
             </h2>
 
             <div style={{
@@ -926,6 +976,7 @@ const App = () => {
             }}>
               {availableProducts.slice(0, 8).map((product) => {
                 const currentIndex = currentImageIndex[product.id] || 0;
+                const isNew = new Date() - new Date(product.created_at) < 7 * 24 * 60 * 60 * 1000;
                 return (
                   <div
                     key={product.id}
@@ -965,6 +1016,23 @@ const App = () => {
                               cursor: 'zoom-in'
                             }}
                           />
+                          {/* Badge NOUVEAU */}
+                          {!product.sold && isNew && (
+                            <div style={{
+                              position: 'absolute',
+                              top: '0.5rem',
+                              left: '0.5rem',
+                              background: 'linear-gradient(135deg, #DAA520 0%, #FFD700 100%)',
+                              color: '#000',
+                              padding: '0.4rem 0.8rem',
+                              borderRadius: '6px',
+                              fontWeight: 700,
+                              fontFamily: 'Arial',
+                              fontSize: '0.7rem'
+                            }}>
+                              NOUVEAU
+                            </div>
+                          )}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1064,7 +1132,7 @@ const App = () => {
                         onMouseEnter={(e) => e.currentTarget.style.background = '#128C7E'}
                         onMouseLeave={(e) => e.currentTarget.style.background = '#25D366'}
                       >
-                        Commander sur WhatsApp
+                        Commander
                       </button>
                     </div>
                   </div>
@@ -1141,35 +1209,41 @@ const App = () => {
               )}
             </div>
 
-            {/* Categories */}
+            {/* Categories with counters */}
             <div style={{
               display: 'flex',
               gap: '1rem',
               marginBottom: '1.5rem',
               flexWrap: 'wrap'
             }}>
-              {CATEGORIES.map(cat => (
-                <button
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat)}
-                  style={{
-                    background: selectedCategory === cat 
-                      ? 'linear-gradient(135deg, #DAA520 0%, #FFD700 100%)'
-                      : 'transparent',
-                    border: selectedCategory === cat ? 'none' : `1px solid ${theme.border}`,
-                    padding: '0.75rem 1.5rem',
-                    borderRadius: '8px',
-                    color: selectedCategory === cat ? '#000' : theme.text,
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    fontFamily: 'Arial',
-                    fontSize: '0.95rem',
-                    transition: 'all 0.3s ease'
-                  }}
-                >
-                  {cat}
-                </button>
-              ))}
+              {CATEGORIES.map(cat => {
+                const count = cat === 'Tous' 
+                  ? products.filter(p => !p.sold).length 
+                  : products.filter(p => p.category === cat && !p.sold).length;
+                
+                return (
+                  <button
+                    key={cat}
+                    onClick={() => setSelectedCategory(cat)}
+                    style={{
+                      background: selectedCategory === cat 
+                        ? 'linear-gradient(135deg, #DAA520 0%, #FFD700 100%)'
+                        : 'transparent',
+                      border: selectedCategory === cat ? 'none' : `1px solid ${theme.border}`,
+                      padding: '0.75rem 1.5rem',
+                      borderRadius: '8px',
+                      color: selectedCategory === cat ? '#000' : theme.text,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      fontFamily: 'Arial',
+                      fontSize: '0.95rem',
+                      transition: 'all 0.3s ease'
+                    }}
+                  >
+                    {cat} ({count})
+                  </button>
+                );
+              })}
             </div>
 
             {/* Sort and View Toggle */}
@@ -1273,6 +1347,7 @@ const App = () => {
             ) : (
               (view === 'sold' ? soldProducts : availableProducts).map(product => {
                 const currentIndex = currentImageIndex[product.id] || 0;
+                const isNew = new Date() - new Date(product.created_at) < 7 * 24 * 60 * 60 * 1000;
                 return (
                   <div
                     key={product.id}
@@ -1313,6 +1388,24 @@ const App = () => {
                               cursor: 'zoom-in'
                             }}
                           />
+                          {/* Badge NOUVEAU */}
+                          {!product.sold && isNew && (
+                            <div style={{
+                              position: 'absolute',
+                              top: '0.5rem',
+                              left: '0.5rem',
+                              background: 'linear-gradient(135deg, #DAA520 0%, #FFD700 100%)',
+                              color: '#000',
+                              padding: '0.4rem 0.8rem',
+                              borderRadius: '6px',
+                              fontWeight: 700,
+                              fontFamily: 'Arial',
+                              fontSize: '0.7rem',
+                              zIndex: 1
+                            }}>
+                              NOUVEAU
+                            </div>
+                          )}
                           {product.images.length > 1 && (
                             <>
                               <button
@@ -1435,7 +1528,8 @@ const App = () => {
                           borderRadius: '6px',
                           fontWeight: 700,
                           fontFamily: 'Arial',
-                          fontSize: '0.75rem'
+                          fontSize: '0.75rem',
+                          zIndex: 2
                         }}>
                           VENDU
                         </div>
@@ -1566,6 +1660,189 @@ const App = () => {
             )}
           </div>
         </>
+      )}
+
+      {/* Toast Notification */}
+      {toast && (
+        <div style={{
+          position: 'fixed',
+          top: '2rem',
+          right: '2rem',
+          background: '#27ae60',
+          color: '#fff',
+          padding: '1rem 2rem',
+          borderRadius: '8px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+          zIndex: 9999,
+          fontFamily: 'Arial',
+          animation: 'slideInRight 0.3s ease-out'
+        }}>
+          ✓ {toast}
+        </div>
+      )}
+
+      {/* Scroll to Top */}
+      {showScrollTop && (
+        <button
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          style={{
+            position: 'fixed',
+            bottom: '2rem',
+            right: '2rem',
+            background: 'linear-gradient(135deg, #DAA520 0%, #FFD700 100%)',
+            border: 'none',
+            borderRadius: '50%',
+            width: '56px',
+            height: '56px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            boxShadow: '0 4px 12px rgba(218,165,32,0.4)',
+            zIndex: 999,
+            color: '#000',
+            fontSize: '24px',
+            fontWeight: 700
+          }}
+        >
+          ↑
+        </button>
+      )}
+
+      {/* Modal À propos */}
+      {showAbout && (
+        <div
+          onClick={() => setShowAbout(false)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.9)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 2000,
+            padding: '2rem',
+            overflowY: 'auto'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: theme.cardBg,
+              padding: '3rem',
+              borderRadius: '12px',
+              maxWidth: '900px',
+              width: '100%',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              border: `1px solid ${theme.border}`,
+              position: 'relative'
+            }}
+          >
+            <button
+              onClick={() => setShowAbout(false)}
+              style={{
+                position: 'absolute',
+                top: '1.5rem',
+                right: '1.5rem',
+                background: 'transparent',
+                border: 'none',
+                color: '#999',
+                cursor: 'pointer',
+                fontSize: '2rem'
+              }}
+            >
+              <X size={32} />
+            </button>
+
+            <h1 style={{ color: '#DAA520', marginTop: 0, fontSize: '2.5rem', marginBottom: '2rem' }}>
+              À propos de Hott Vintage
+            </h1>
+
+            <div style={{ fontFamily: 'Arial', lineHeight: '1.8', color: theme.text }}>
+              <h2 style={{ color: '#DAA520', fontSize: '1.8rem', marginTop: '2rem' }}>Notre histoire</h2>
+              <p>
+                L'histoire de Hott Vintage commence bien avant son lancement officiel.
+                Tout débute en 2024, avec une passion commune pour l'habillement, le style et les pièces uniques. 
+                Entre amis, nous aimions déjà chiner, porter et partager des vêtements qui se démarquent, 
+                des pièces qui brillent et racontent une histoire.
+              </p>
+              <p>
+                En 2026, cette passion devient un vrai projet : Hott Vintage voit officiellement le jour, 
+                fondé par trois amis animés par l'amour du vintage, de la qualité et de l'entrepreneuriat.
+                Notre objectif était simple mais ambitieux : permettre à chacun de bien s'habiller, 
+                avec style et originalité, à des prix raisonnables.
+              </p>
+              <p>
+                Nous avons commencé modestement, via Instagram, les ventes entre amis et la famille, 
+                avant d'ouvrir une friperie physique puis de lancer notre site en ligne. 
+                Aujourd'hui, Hott Vintage est d'être premiers site de friperie vintage au Sénégal, 
+                avec l'ambition de devenir une référence, Inch'Allah.
+              </p>
+
+              <h2 style={{ color: '#DAA520', fontSize: '1.8rem', marginTop: '2rem' }}>Nos valeurs</h2>
+              <p>Chez Hott Vintage, chaque pièce est choisie avec soin. Nous mettons un point d'honneur à proposer :</p>
+              <ul style={{ marginLeft: '2rem' }}>
+                <li>Des pièces authentiques et de qualité</li>
+                <li>Un style unique et original</li>
+                <li>Une mode durable, loin de la fast fashion</li>
+                <li>La confiance entre nous et nos clients</li>
+              </ul>
+              <p>
+                Nous voulons que nos clients soient fiers de porter du vintage, fiers de leur style, 
+                et sûrs de porter des vêtements qui sortent de l'ordinaire.
+              </p>
+
+              <h2 style={{ color: '#DAA520', fontSize: '1.8rem', marginTop: '2rem' }}>
+                Pourquoi choisir Hott Vintage ?
+              </h2>
+              <p>Acheter chez Hott Vintage, c'est choisir :</p>
+              <ul style={{ marginLeft: '2rem' }}>
+                <li>Une sélection rigoureuse de pièces uniques</li>
+                <li>Des prix fixes, justes et abordables</li>
+                <li>Un service rapide et réactif</li>
+                <li>Une expérience simple : via notre site ou Instagram</li>
+                <li>Livraison sur Dakar (extension prévue dans tout le Sénégal à l'avenir, Inch'Allah)</li>
+              </ul>
+
+              <h2 style={{ color: '#DAA520', fontSize: '1.8rem', marginTop: '2rem' }}>Collaborations</h2>
+              <p>
+                Nous collaborons déjà avec des influenceurs et des photographes, 
+                et nous sommes ouverts à toute collaboration sérieuse.
+              </p>
+              <p>Que vous soyez :</p>
+              <ul style={{ marginLeft: '2rem' }}>
+                <li>une marque</li>
+                <li>un créateur</li>
+                <li>un artiste</li>
+                <li>ou un acteur de la mode</li>
+              </ul>
+              <p>
+                Hott Vintage est ouvert aux propositions : shootings, événements, projets créatifs.
+                Nous croyons au travail en équipe et à la mise en avant des talents.
+              </p>
+
+              <div style={{ 
+                marginTop: '3rem', 
+                padding: '2rem', 
+                background: 'linear-gradient(135deg, #DAA520 0%, #FFD700 100%)',
+                borderRadius: '12px',
+                textAlign: 'center',
+                color: '#000'
+              }}>
+                <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.5rem' }}>Hott Vintage</h3>
+                <p style={{ margin: '0.5rem 0', fontSize: '1.1rem', fontWeight: 600 }}>
+                  Plus qu'une friperie, un style.
+                </p>
+                <p style={{ margin: '0.5rem 0' }}>Dakar – Sénégal</p>
+                <p style={{ margin: '0.5rem 0' }}>Commandes via le site ou WhatsApp</p>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Image Zoom Modal */}
@@ -2060,7 +2337,7 @@ const App = () => {
           </div>
           
           <p style={{ margin: '0.5rem 0', color: theme.textMuted }}>
-            © 2026 Mister X. Tous droits réservés.
+            © 2026 Misterx. Tous droits réservés.
           </p>
           
           <p style={{ margin: '0.5rem 0', color: theme.textMuted, fontSize: '0.9rem' }}>
@@ -2095,6 +2372,17 @@ const App = () => {
           to {
             opacity: 1;
             transform: translateY(0);
+          }
+        }
+        
+        @keyframes slideInRight {
+          from {
+            opacity: 0;
+            transform: translateX(50px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
           }
         }
         
